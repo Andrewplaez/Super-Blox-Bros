@@ -1,74 +1,51 @@
--- Services
-local Players = game:GetService("Players")
+local player = game.Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local humanoid = character:WaitForChild("Humanoid")
+local humanoidRootPart = character:WaitForChild("HumanoidRootPart")
+local camera = workspace.CurrentCamera
+local cameraPart = workspace.Map:WaitForChild("CameraPart")
+
+local Cas = game:GetService("ContextActionService")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 
--- Player and character references
-local player = Players.LocalPlayer
-local character = player.Character or player.CharacterAdded:Wait()
-local humanoidRootPart = character:WaitForChild("HumanoidRootPart")
-local camera = workspace.CurrentCamera
-
--- ===== Movement Variables =====
-local speed = 20
-local moveDirection = 0
-
--- ===== Camera Settings =====
-local cameraDistance = 20
-local cameraHeight = 5
 camera.CameraType = Enum.CameraType.Scriptable
 
--- ===== Input Handling =====
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-	if gameProcessed then return end
-	if input.KeyCode == Enum.KeyCode.A then
-		moveDirection = -1
-	elseif input.KeyCode == Enum.KeyCode.D then
-		moveDirection = 1
+local forwardmove = Enum.PlayerActions.CharacterForward
+local backwardmove = Enum.PlayerActions.CharacterBackward 
+
+-- Block movement
+local function Sink(actionName, inputState, inputObject)
+	return Enum.ContextActionResult.Sink
+end
+
+Cas:BindAction("SinkForwardMovement", Sink, false, forwardmove)
+Cas:BindAction("SinkBackwardMovement", Sink, false, backwardmove)
+
+-- Double jump variables
+local hasDoubleJumped = false
+
+-- Reset double jump when landing
+humanoid.StateChanged:Connect(function(oldState, newState)
+	if newState == Enum.HumanoidStateType.Landed then
+		hasDoubleJumped = false
 	end
 end)
 
-UserInputService.InputEnded:Connect(function(input)
-	if input.KeyCode == Enum.KeyCode.A and moveDirection == -1 then
-		moveDirection = 0
-	elseif input.KeyCode == Enum.KeyCode.D and moveDirection == 1 then
-		moveDirection = 0
+-- Handle jump input
+UserInputService.JumpRequest:Connect(function()
+	-- Allow double jump if the player is in the air (any state except running or landed)
+	if humanoid.FloorMaterial == Enum.Material.Air then else task.wait(.5)
+		if not hasDoubleJumped then
+			hasDoubleJumped = true
+			humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+		end
 	end
 end)
 
--- ===== BodyVelocity Setup =====
-local bodyVelocity = Instance.new("BodyVelocity")
-bodyVelocity.MaxForce = Vector3.new(1e5, 0, 1e5)
-bodyVelocity.Velocity = Vector3.zero
-bodyVelocity.Parent = humanoidRootPart
-
--- ===== Main Loop =====
+-- Camera update
 RunService.RenderStepped:Connect(function()
-	-- ONLY X movement, DO NOT TOUCH Y
-	bodyVelocity.Velocity = Vector3.new(
-		moveDirection * speed,
-		0,
-		0
-	)
+	camera.CFrame = cameraPart.CFrame
+end)
 
-	-- Camera
-	local cameraPosition = Vector3.new(
-		humanoidRootPart.Position.X,
-		humanoidRootPart.Position.Y + cameraHeight,
-		humanoidRootPart.Position.Z + cameraDistance
-	)
-
-	camera.CFrame = CFrame.new(
-		cameraPosition,
-		humanoidRootPart.Position + Vector3.new(0, cameraHeight, 0)
-	)
-
-	-- Face left / right
-	if moveDirection ~= 0 then
-		humanoidRootPart.CFrame =
-			CFrame.new(
-				humanoidRootPart.Position,
-				humanoidRootPart.Position + Vector3.new(moveDirection, 0, 0)
-			)
-	end
 end)
