@@ -1,0 +1,139 @@
+-- SideScrollerController.lua
+-- 2D Side-Scroller Movement Module (Roblox)
+
+local SideScrollerController = {}
+
+-- Services
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+
+-- Defaults
+local DEFAULT_CONFIG = {
+	Speed = 20,
+	CameraDistance = 20,
+	CameraHeight = 5,
+	LockZ = true,
+}
+
+-- Internal state
+local connections = {}
+local moveDirection = 0
+local lockedZ = 0
+
+-- Cleanup helper
+local function disconnectAll()
+	for _, c in ipairs(connections) do
+		c:Disconnect()
+	end
+	table.clear(connections)
+end
+
+-- Main initializer
+function SideScrollerController.Start(config)
+	config = config or {}
+	for k, v in pairs(DEFAULT_CONFIG) do
+		if config[k] == nil then
+			config[k] = v
+		end
+	end
+
+	local player = Players.LocalPlayer
+	local camera = workspace.CurrentCamera
+
+	local function setupCharacter(character)
+		disconnectAll()
+
+		local humanoid = character:WaitForChild("Humanoid")
+		local hrp = character:WaitForChild("HumanoidRootPart")
+
+		-- Disable Roblox rotation
+		humanoid.AutoRotate = false
+
+		-- Lock Z
+		lockedZ = hrp.Position.Z
+
+		-- ===== Physics =====
+		local attachment = Instance.new("Attachment")
+		attachment.Parent = hrp
+
+		local linearVelocity = Instance.new("LinearVelocity")
+		linearVelocity.Attachment0 = attachment
+		linearVelocity.RelativeTo = Enum.ActuatorRelativeTo.World
+		linearVelocity.MaxForce = math.huge
+		linearVelocity.VectorVelocity = Vector3.zero
+		linearVelocity.Parent = hrp
+
+		-- ===== Camera =====
+		camera.CameraType = Enum.CameraType.Scriptable
+
+		-- ===== Input =====
+		table.insert(connections, UserInputService.InputBegan:Connect(function(input, gp)
+			if gp then return end
+			if input.KeyCode == Enum.KeyCode.A then
+				moveDirection = -1
+			elseif input.KeyCode == Enum.KeyCode.D then
+				moveDirection = 1
+			end
+		end))
+
+		table.insert(connections, UserInputService.InputEnded:Connect(function(input)
+			if input.KeyCode == Enum.KeyCode.A and moveDirection == -1 then
+				moveDirection = 0
+			elseif input.KeyCode == Enum.KeyCode.D and moveDirection == 1 then
+				moveDirection = 0
+			end
+		end))
+
+		-- ===== Main Loop =====
+		table.insert(connections, RunService.RenderStepped:Connect(function()
+			-- Horizontal movement only
+			linearVelocity.VectorVelocity = Vector3.new(
+				moveDirection * config.Speed,
+				0,
+				0
+			)
+
+			-- Hard lock Z-axis
+			if config.LockZ then
+				hrp.Position = Vector3.new(
+					hrp.Position.X,
+					hrp.Position.Y,
+					lockedZ
+				)
+			end
+
+			-- Face left/right
+			if moveDirection ~= 0 then
+				hrp.CFrame = CFrame.new(
+					hrp.Position,
+					hrp.Position + Vector3.new(moveDirection, 0, 0)
+				)
+			end
+
+			-- Camera follow
+			local camPos = hrp.Position
+				+ Vector3.new(0, config.CameraHeight, config.CameraDistance)
+
+			camera.CFrame = CFrame.new(
+				camPos,
+				hrp.Position + Vector3.new(0, config.CameraHeight, 0)
+			)
+		end))
+	end
+
+	-- Initial character
+	if player.Character then
+		setupCharacter(player.Character)
+	end
+
+	-- Respawn handling
+	table.insert(connections, player.CharacterAdded:Connect(setupCharacter))
+end
+
+-- Stop & cleanup (optional)
+function SideScrollerController.Stop()
+	disconnectAll()
+end
+
+return SideScrollerController
