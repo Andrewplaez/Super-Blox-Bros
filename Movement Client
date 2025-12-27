@@ -4,29 +4,33 @@ local humanoid = character:WaitForChild("Humanoid")
 local humanoidRootPart = character:WaitForChild("HumanoidRootPart")
 local camera = workspace.CurrentCamera
 local cameraPart = workspace.Map:WaitForChild("CameraPart")
-
+local Modules = game:GetService("ReplicatedStorage").Modules.Client
+local Combat = require(Modules.CombatModule)
 local Cas = game:GetService("ContextActionService")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
-
+local CombatMovement = Combat.new(character)
 camera.CameraType = Enum.CameraType.Scriptable
-
-local forwardmove = Enum.PlayerActions.CharacterForward
-local backwardmove = Enum.PlayerActions.CharacterBackward 
 
 -- Block movement
 local function Sink(actionName, inputState, inputObject)
 	return Enum.ContextActionResult.Sink
 end
 
-Cas:BindAction("SinkForwardMovement", Sink, false, forwardmove)
-Cas:BindAction("SinkBackwardMovement", Sink, false, backwardmove)
+local function Dash()
+	CombatMovement:Dash()
+end
+
+Cas:BindAction("SinkForwardMovement", Sink, false, Enum.PlayerActions.CharacterForward)
+Cas:BindAction("SinkBackwardMovement", Sink, false, Enum.PlayerActions.CharacterBackward)
+Cas:BindAction("Dash", Dash, false, Enum.KeyCode.E)
 
 -- Double jump variables
 local hasDoubleJumped = false
+local jumpPressed = false -- debounce for fresh jump press
 
 -- Reset double jump when landing
-humanoid.StateChanged:Connect(function(oldState, newState)
+humanoid.StateChanged:Connect(function(_, newState)
 	if newState == Enum.HumanoidStateType.Landed then
 		hasDoubleJumped = false
 	end
@@ -34,18 +38,28 @@ end)
 
 -- Handle jump input
 UserInputService.JumpRequest:Connect(function()
-	-- Allow double jump if the player is in the air (any state except running or landed)
-	if humanoid.FloorMaterial == Enum.Material.Air then else task.wait(.5)
-		if not hasDoubleJumped then
-			hasDoubleJumped = true
-			humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+	if not jumpPressed then
+		jumpPressed = true
+
+		if humanoid.FloorMaterial == Enum.Material.Air then
+			if not hasDoubleJumped then
+				hasDoubleJumped = true
+				humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+			end
 		end
+	end
+end)
+
+-- Reset jumpPressed when player releases the jump key
+UserInputService.InputEnded:Connect(function(input, processed)
+	if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == Enum.KeyCode.Space then
+		jumpPressed = false
+	elseif input.UserInputType == Enum.UserInputType.Touch then
+		jumpPressed = false
 	end
 end)
 
 -- Camera update
 RunService.RenderStepped:Connect(function()
 	camera.CFrame = cameraPart.CFrame
-end)
-
 end)
