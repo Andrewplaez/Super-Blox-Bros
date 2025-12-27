@@ -1,0 +1,45 @@
+local ReplicatedStorage = game.ReplicatedStorage
+local StateHandler = require(ReplicatedStorage.Modules.Server.StateHandler)
+local CombatEvent = ReplicatedStorage.Events.Combat
+local Players = game.Players
+
+-- Connect player
+Players.PlayerAdded:Connect(function(player)
+	local character = player.Character or player.CharacterAdded:Wait()
+
+	-- Initialize states
+	StateHandler.SetState(character, "Weapon", "Fists")
+	StateHandler.SetState(character, "Health", 0) -- assuming 100 is max health
+	StateHandler.SetState(character, "State", "None")
+end)
+
+-- Handle combat events
+CombatEvent.OnServerEvent:Connect(function(player, duration)
+	local character = player.Character
+	if not character then return end
+	local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+	if not humanoidRootPart then return end
+
+	-- Set Dash state
+	StateHandler.SetState(character, "State", "Dash")
+
+	-- Apply dash velocity
+	local dashSpeed = 20-- studs per second, adjust as needed
+	local moveDirection = humanoidRootPart.CFrame.LookVector -- forward direction
+	local bodyVelocity = Instance.new("BodyVelocity")
+	bodyVelocity.Velocity = moveDirection * dashSpeed
+	bodyVelocity.MaxForce = Vector3.new(1e5, 0, 1e5)
+	bodyVelocity.P = 1e4
+	bodyVelocity.Parent = humanoidRootPart
+
+	-- Remove BodyVelocity after duration
+	task.delay(duration, function()
+		if bodyVelocity and bodyVelocity.Parent then
+			bodyVelocity:Destroy()
+		end
+		if character then
+			StateHandler.SetState(character, "State", "None")
+		end
+	end)
+end)
+
