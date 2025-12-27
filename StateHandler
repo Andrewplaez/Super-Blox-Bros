@@ -1,0 +1,159 @@
+local module = {}
+
+local states = {}
+local stunTimers = {}
+
+function module.ReturnStates(char)
+	return states[char]
+end
+
+function module.GetState(char, stateKey)
+	if states[char] then
+		return states[char][stateKey]
+	end
+	return nil
+end
+
+function module.SetState(char, stateKey, value, duration)
+	if not states[char] then
+		states[char] = {}
+	end
+
+	states[char][stateKey] = value
+	if char then
+		char:SetAttribute(stateKey, value)
+	end
+
+	if duration and type(duration) == "number" then
+		delay(duration, function()
+			if states[char] then
+				states[char][stateKey] = nil
+				if char then
+					char:SetAttribute(stateKey, nil)
+				end
+
+				if next(states[char]) == nil then
+					states[char] = nil
+				end
+			end
+		end)
+	end
+end
+
+function module.SetStun(char, value, duration, stunSpeed)
+	if not char or not char:FindFirstChild("Humanoid") then return end
+
+	local humanoid = char.Humanoid
+
+	if not states[char] then
+		states[char] = {}
+	end
+
+	if value then
+		states[char]["Stunned"] = true
+		char:SetAttribute("Stunned", true)
+
+		if not states[char].OriginalWalkSpeed then
+			states[char].OriginalWalkSpeed = humanoid.WalkSpeed
+		end
+
+		humanoid.WalkSpeed = stunSpeed or 0
+
+		local endTime = time() + duration
+
+		if stunTimers[char] then
+			stunTimers[char].EndTime = math.max(stunTimers[char].EndTime, endTime)
+		else
+			stunTimers[char] = { EndTime = endTime }
+
+			coroutine.wrap(function()
+				while stunTimers[char] and time() < stunTimers[char].EndTime do
+					task.wait(0.1)
+				end
+
+				if states[char] then
+					states[char]["Stunned"] = nil
+					char:SetAttribute("Stunned", nil)
+
+					if char:FindFirstChild("Humanoid") then
+						local h = char.Humanoid
+						h.WalkSpeed = states[char].OriginalWalkSpeed or 16
+					end
+
+					states[char].OriginalWalkSpeed = nil
+
+					if next(states[char]) == nil then
+						states[char] = nil
+					end
+				end
+
+				stunTimers[char] = nil
+			end)()
+		end
+	else
+		states[char]["Stunned"] = nil
+		char:SetAttribute("Stunned", nil)
+
+		if char:FindFirstChild("Humanoid") then
+			local h = char.Humanoid
+			h.WalkSpeed = states[char].OriginalWalkSpeed or 16
+		end
+
+		states[char].OriginalWalkSpeed = nil
+		stunTimers[char] = nil
+
+		if next(states[char]) == nil then
+			states[char] = nil
+		end
+	end
+end
+
+function module.RemoveStates(char, stateKey)
+	if not states[char] then return end
+
+	if stateKey then
+		states[char][stateKey] = nil
+		if char then
+			char:SetAttribute(stateKey, nil)
+		end
+
+		if next(states[char]) == nil then
+			states[char] = nil
+		end
+	else
+		for key in pairs(states[char]) do
+			if char then
+				char:SetAttribute(key, nil)
+			end
+		end
+		states[char] = nil
+	end
+end
+
+function module.ClearAllStates()
+	for char in pairs(states) do
+		for key in pairs(states[char]) do
+			if char then
+				char:SetAttribute(key, nil)
+			end
+		end
+		states[char] = nil
+	end
+
+	for char in pairs(stunTimers) do
+		stunTimers[char] = nil
+	end
+end
+
+game.Players.PlayerRemoving:Connect(function(plr)
+	if plr.Character then
+		for key in pairs(states[plr.Character] or {}) do
+			plr.Character:SetAttribute(key, nil)
+		end
+
+		states[plr.Character] = nil
+		stunTimers[plr.Character] = nil
+	end
+end)
+
+return module
