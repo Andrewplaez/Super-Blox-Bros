@@ -1,1 +1,38 @@
+local module = {}
+module.__index = module
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local CoreMovement = ReplicatedStorage.Animations.Core
+local Combat = ReplicatedStorage.Events.Combat
+
+function module.new(character)
+	local self = setmetatable({}, module)
+	self.character = character
+	self.Humanoid = character:WaitForChild("Humanoid")
+	return self
+end
+
+function module:Dash()
+	-- Must be moving
+	if self.Humanoid.MoveDirection.Magnitude == 0 then return end
+
+	-- Must be in neutral state
+	if self.character:GetAttribute("State") ~= "None" then return end
+
+	local animator = self.Humanoid:FindFirstChildOfClass("Animator")
+	if not animator then return end
+
+	local track = animator:LoadAnimation(CoreMovement.Dash)
+	if not track then return end
+
+	-- Play animation
+	track:Play()
+
+	-- Fire server safely
+	if Combat and Combat:IsA("RemoteEvent") then
+		Combat:FireServer(track.length)
+	end
+end
+
+return module
 
